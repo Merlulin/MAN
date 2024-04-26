@@ -103,12 +103,11 @@ class Environment:
         #####################################################################################
         # 创新点1：拥塞区域检测，如果发生碰撞则说明这个区域存在拥塞可能
         #####################################################################################
-        self.congestion_map = self.gen_congestion_map(k=config.congestion_radius)
         # 拥塞区域判断图
         self.conflict_group = []
         self.block_area = np.zeros_like(self.map, dtype=bool)
         # 位于拥塞区域的时间步数
-        self.stay_congestion_time = [0] * self.num_agents
+        # self.stay_congestion_time = [0] * self.num_agents
 
         # 每个智能体已走过的路线路
         self.has_go_map = np.zeros((self.num_agents, self.map_size[0], self.map_size[1]), dtype=bool)
@@ -179,7 +178,7 @@ class Environment:
 
         self.last_actions = np.zeros((self.num_agents, 5), dtype=bool)
 
-        self.congestion_map = self.gen_congestion_map(k=config.congestion_radius)
+
         self.block_area = np.zeros_like(self.map, dtype=bool)
         self.conflict_group = []
         self.has_go_map = np.zeros((self.num_agents, self.map_size[0], self.map_size[1]), dtype=bool)
@@ -204,7 +203,6 @@ class Environment:
 
         self.last_actions = np.zeros((self.num_agents, 5), dtype=bool)
         
-        self.congestion_map = self.gen_congestion_map(k=config.congestion_radius)
         self.block_area = np.zeros_like(self.map, dtype=bool)
         self.conflict_group = []
         self.has_go_map = np.zeros((self.num_agents, self.map_size[0], self.map_size[1]), dtype=bool)
@@ -555,7 +553,10 @@ class Environment:
                         collide_agent_id.remove(collide_agent_pos[0][2])
 
                     next_next_pos[collide_agent_id] = next_pos[collide_agent_id]
-
+                    
+                    for id in collide_agent_id:
+                        next_checking_list.remove(id)
+                    
                     self.conflict_group.append(temp_conflict_group)
                     next_no_conflict = False
                     break
@@ -564,7 +565,6 @@ class Environment:
         #####################################################################
         # 创新点 1： 每一次行动后，根据冲突组的信息更新拥塞区域，并给予行为的变化进行惩罚
         #####################################################################
-        self.congestion_map = self.gen_congestion_map(k=config.congestion_radius)
         self.block_area = self.check_congestion_area(k=config.congestion_expend)
         agent_map = np.zeros((self.map_size), dtype=bool)
         agent_map[self.agents_pos[:, 0], self.agents_pos[:, 1]] = 1
@@ -1130,7 +1130,6 @@ class Environment:
         )
 
         obstacle_map = np.pad(self.map, self.obs_radius, "constant", constant_values=0)
-        congestion_map_padded = np.pad(self.congestion_map, self.obs_radius, "constant", constant_values=1.)
         block_area_padded = np.pad(self.block_area, self.obs_radius, "constant", constant_values=True)
         has_go_padded = np.pad(self.has_go_map, ((0, 0), (self.obs_radius, self.obs_radius), (self.obs_radius, self.obs_radius)), "constant", constant_values=True)
 
@@ -1192,7 +1191,6 @@ class Environment:
         obstacle_map = np.pad(self.map, self.obs_radius, "constant", constant_values=0)
         # pad with 0, so later the boundary is [x:x+2*self.obs_radius+1, y:y+2*self.obs_radius+1]
         # instead of [x-self.obs_radius:x+self.obs_radius+1, y-self.obs_radius:y+self.obs_radius+1] 
-        congestion_map_padded = np.pad(self.congestion_map, self.obs_radius, "constant", constant_values=1.)
         block_area_padded = np.pad(self.block_area, self.obs_radius, "constant", constant_values=True)
         has_go_padded = np.pad(self.has_go_map, ((0, 0), (self.obs_radius, self.obs_radius), (self.obs_radius, self.obs_radius)), "constant", constant_values=True)
 
@@ -1328,27 +1326,6 @@ class Environment:
                 path = None
                 print("Unknown Exception Detected: ", exception)
         return path
-
-    def gen_congestion_map(self, k=config.congestion_radius):
-        '''
-        生成拥塞信息图
-        k: 表示拥塞窗口的半径
-        '''
-        congestion_map = np.zeros_like(self.map, dtype=np.float32)
-        padding_map = np.copy(self.map)
-        for x, y in self.agents_pos:
-            padding_map[x][y] = 2
-        padding_map = np.pad(padding_map, pad_width=k, mode='constant', constant_values=-1)
-        free_map = np.where(padding_map == 2, 1, 0)
-        pos_map = np.where(padding_map == 0, 1, 0)
-        for i in range(congestion_map.shape[0]):
-            for j in range(congestion_map.shape[1]):
-                if pos_map[i : i + 2 * k + 1, j : j + 2 * k + 1].sum() != 0:
-                    congestion_map[i][j] = free_map[i : i + 2 * k + 1, j : j + 2 * k + 1].sum().astype(np.float32) / pos_map[i : i + 2 * k + 1, j : j + 2 * k + 1].sum().astype(np.float32)
-                else:
-                    congestion_map[i][j] = 1.0
-        return congestion_map
-    
         
     def check_congestion_area(self, k=config.congestion_expend):
         '''
@@ -1393,7 +1370,7 @@ class Environment:
         for group in self.conflict_group:
             for id in group:
                 x, y = self.agents_pos[id]
-                self.block_area[x][y] = False
+                block_area[x][y] = False
                 dfs(x, y, 0, False)
         
         return block_area
